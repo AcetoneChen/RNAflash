@@ -1,0 +1,13 @@
+/*/
+!/src/
+!/datasets/
+!/ckpts/
+
+/datasets/*
+!/datasets/.gitkeep
+/ckpts/*
+!/ckpts/.gitkeep
+
+
+__pycache__/
+*.py[cod]

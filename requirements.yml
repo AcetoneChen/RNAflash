@@ -1,0 +1,26 @@
+name: RNAflash
+channels:
+  - pytorch
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.10.19
+  - pip
+  - numpy=2.2.6
+  - scipy=1.15.2
+  - biopython=1.88
+  - faiss-gpu=1.13.2=py3.10_h1b31e9c_0_cuda12.6
+  - bioconda::hmmer=3.4=h7d74f8d_5
+  - pip:
+      # Official PyTorch CUDA 12.4 wheels, matching the installed torch build.
+      - --extra-index-url https://download.pytorch.org/whl/cu124
+      - torch==2.6.0+cu124
+      - lightning==2.6.0
+      - pytorch-lightning==2.6.0
+      - torchmetrics==1.8.2
+      - tqdm==4.67.1
+      - numba==0.65.1
+      - transformers==5.17.0
+      - einops==0.8.2
+      - ml-collections==1.1.0
