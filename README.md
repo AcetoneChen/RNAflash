@@ -21,44 +21,29 @@ conda env create -f requirements.yml
 conda activate RNAflash
 ```
 
-`requirements.yml` pins the core dependencies from the development environment:
-PyTorch 2.6.0 (CUDA 12.4), Lightning 2.6.0, FAISS GPU 1.13.2 (CUDA 12.6), and
-HMMER 3.4, including `esl-reformat`. Use an NVIDIA driver compatible with CUDA 12.6.
-Alternative backbones may require additional packages, such as FlashAttention for RiNALMo.
+Dependencies are pinned in `requirements.yml`, including PyTorch 2.6.0 (CUDA
+12.4), FAISS GPU 1.13.2 (CUDA 12.6), and HMMER 3.4 (`nhmmer` and
+`esl-reformat`). An NVIDIA GPU and a driver compatible with CUDA 12.6 are
+required. Tested on Ubuntu 16.04.6 LTS with a single RTX 3090 (24 GiB).
+RiNALMo additionally requires FlashAttention (tested with 2.7.1.post4).
 
-The five scripts require the project's `src/` package and trained checkpoints;
-they are not standalone model implementations. Place the retrieval checkpoint at
-`ckpts/RNAflashR.ckpt`, and the alignment checkpoint at `ckpts/RNAflashA.ckpt`
-when using `align.py`. The checkpoints can be downloaded [here](https://drive.google.com/file/d/103fUAx3c10UUAdVR7fczqBBUNQDW09y9/view?usp=sharing).
+Download the [checkpoints](https://drive.google.com/file/d/103fUAx3c10UUAdVR7fczqBBUNQDW09y9/view?usp=sharing)
+and place them at `ckpts/RNAflashR.ckpt` (retrieval) and `ckpts/RNAflashA.ckpt`
+(RNAflashA alignment). Run all commands from the project root.
 
 ## Prepare the database
 
-Database files are not included in this repository. Create a `dataset/` directory,
-download the database archive from Zenodo (coming soon), and extract it there.
-
-
-The current scripts expect `datasets/` (plural). For a fresh checkout, create a
-compatibility symlink:
+Download all 43 database parts (`RNAcentral_27.tar.gz.part000` through `part042`)
+from [Zenodo](https://zenodo.org/records/23492657) into the project root, then
+merge and extract:
 
 ```bash
-mkdir -p dataset
-ln -s dataset datasets
-tar -xzvf /path/to/RNAcentral_27.tar.gz -C dataset/
+mkdir -p datasets
+LC_ALL=C cat RNAcentral_27.tar.gz.part[0-9][0-9][0-9] > RNAcentral_27.tar.gz &&
+tar -xzvf RNAcentral_27.tar.gz -C datasets/
 ```
 
-If the Zenodo download is split into numbered files, download all parts and the
-`RNAcentral_27.tar.gz.parts.json` manifest into one directory. In that directory,
-merge and verify them before extracting the resulting archive into `dataset/`:
-
-```bash
-cat RNAcentral_27.tar.gz.part[0-9][0-9][0-9] > RNAcentral_27.tar.gz
-python -c 'import json; m=json.load(open("RNAcentral_27.tar.gz.parts.json")); print(m["md5"] + "  RNAcentral_27.tar.gz")' | md5sum -c -
-```
-
-Proceed with extraction only if the checksum reports `OK`.
-
-If `datasets/` already exists, extract into that directory instead of creating the
-symlink. The expected database files are:
+The expected database files are:
 
 ```text
 datasets/RNAcentral_27/
@@ -68,9 +53,19 @@ datasets/RNAcentral_27/
     └── faiss_index_fp32.index
 ```
 
+For benchmark queries, download `benchmark_dataset.zip` from
+[Zenodo](https://zenodo.org/records/23599961) and extract it into `datasets/`
+from the project root:
+
+```bash
+mkdir -p datasets
+unzip /path/to/benchmark_dataset.zip -d datasets/
+```
+
 Alternatively, encode your own FASTA database. Use one header line and one
 unwrapped sequence line per record. Set `FASTA_PATH`, `FASTA_INDEX_PATH`,
-`SAVE_DIR`, and the CUDA device in `embed_database_indexed.py`, then run:
+`SAVE_DIR`, and `device` (`cuda:0` for a single GPU) in
+`embed_database_indexed.py`, then run:
 
 ```bash
 python embed_database_indexed.py
@@ -85,7 +80,8 @@ come from the same database build.
 ## Run inference
 
 Place one query per file in `datasets/<target>/fasta/<query_id>.fasta`, using one
-unwrapped sequence line. Replace `my_queries` below with your target directory name.
+unwrapped sequence line. Replace `my_queries` below with your target directory
+name (e.g. `RNAsolo_singlechain` for the benchmark).
 
 For FAISS retrieval followed by nhmmer alignment:
 
@@ -108,8 +104,8 @@ python search_faiss_mmp.py --target my_queries --probe 512 --topk 5000
 python align.py
 ```
 
-Before running, select an available CUDA device in both scripts and set
-`align.py`'s `fasta_dir` to
+Before running, set `device` in both scripts to an available GPU (`cuda:0` for a
+single GPU; the scripts currently default to `cuda:2`). Set `align.py`'s `fasta_dir` to
 `datasets/my_queries/search_all/search_nprobe512_top5000`; set `a2m_dir` to your
 desired output directory. These settings are configured inside `align.py`.
 
