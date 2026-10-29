@@ -198,7 +198,7 @@ def main(argv=None):
     sequences = [str(SeqIO.read(path, "fasta").seq).upper().replace("T", "U")
                  for path in query_files]
 
-    output_dir = Path(args.save_dir) / f"a2m_RNAflashL_nprobe{args.nprob}_top{args.topk}_exp"
+    output_dir = Path(args.save_dir) / f"a2m_RNAflashL_nprobe{args.nprob}_top{args.topk}"
     retrieved_dir = (Path("datasets") / args.target / "search_all"
                      / f"search_nprobe{args.nprob}_top{args.topk}")
 

@@ -1,9 +1,7 @@
-import lightning as L
+import argparse
 import torch
 import time
 
-from torch.utils.data import DataLoader
-import pickle, json
 from tqdm import tqdm
 import os
 
@@ -25,7 +23,24 @@ def parse_fasta(path):
     return descs, seqs
 
 
-device = torch.device('cuda:2')
+def positive_int(value):
+    value = int(value)
+    if value < 1:
+        raise argparse.ArgumentTypeError('must be a positive integer')
+    return value
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Rerank and align FAISS search results with RNAflashA.')
+    parser.add_argument('--probe', type=positive_int, default=512)
+    parser.add_argument('--topk', type=positive_int, default=1000)
+    parser.add_argument('--target', default='RNAsolo_singlechain')
+    parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--checkpoint', default='ckpts/RNAflashA.ckpt')
+    parser.add_argument('--batch-size', type=positive_int, default=8)
+    parser.add_argument('--fasta-dir', help='Override the input directory derived from target, probe and topk')
+    parser.add_argument('--output-dir', help='Override the alignment output directory')
+    return parser.parse_args()
 
 class DatabaseConverter(object):
     def __init__(self, model_type='fm', alphabet=None):
@@ -53,27 +68,35 @@ class DatabaseConverter(object):
         return toks, mask, fam_names
     
 
-if __name__ == '__main__':
+def main():
+    args = parse_args()
     start_time = time.time()
 
-    ckpt_path = 'ckpts/RNAflashA.ckpt'
-    model = RNAflashA.load_from_checkpoint(ckpt_path, 'cpu', weights_only=False)
+    fasta_dir = args.fasta_dir or (
+        f'datasets/{args.target}/search_all/search_nprobe{args.probe}_top{args.topk}'
+    )
+    a2m_dir = args.output_dir or (
+        f'datasets/{args.target}/a2m_RNAflashA_nprobe{args.probe}_top{args.topk}'
+    )
+    fasta_names = sorted(
+        name for name in os.listdir(fasta_dir)
+        if name.endswith('.fasta') and os.path.isfile(os.path.join(fasta_dir, name))
+    )
+    if not fasta_names:
+        raise ValueError(f'No .fasta files found in {fasta_dir}')
+
+    device = torch.device(args.device)
+    model = RNAflashA.load_from_checkpoint(args.checkpoint, 'cpu', weights_only=False)
 
     model.to(device)
     model.eval()
-
-    fasta_dir = 'datasets/RNAsolo_singlechain/search_nprobe512_top1000_exp'
-
-    a2m_dir = 'datasets/RNAsolo_singlechain/a2m_RNAflashA_nprobe512_top1000'
-
 
     os.makedirs(a2m_dir, exist_ok=True)
     converter = DatabaseConverter(
         model.backbone.pretrained_model, model.backbone.alphabet
     )
-    fasta_names = os.listdir(fasta_dir)
-    for i, fasta_name in enumerate(tqdm(fasta_names)):
-        entity = fasta_name.split('.')[0]
+    for fasta_name in tqdm(fasta_names):
+        entity = os.path.splitext(fasta_name)[0]
         fasta_path = f'{fasta_dir}/{fasta_name}'
         a2m_path = f'{a2m_dir}/{entity}.a2m'
         
@@ -81,8 +104,10 @@ if __name__ == '__main__':
         name_seqs = list(zip(descs, seqs))
         _, query_seq = name_seqs[0]
         target_name_seqs = name_seqs[1:]
-        with torch.amp.autocast('cuda', dtype=torch.bfloat16):
-            reranked_targets = model.reranking_ali_filter(query_seq, target_name_seqs, converter, bsz=8)
+        with torch.amp.autocast(device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda'):
+            reranked_targets = model.reranking_ali_filter(
+                query_seq, target_name_seqs, converter, bsz=args.batch_size
+            )
         with open(a2m_path, 'w') as f:
             f.write(f'>query\n{query_seq}\n')
             for name, gapped_seq, prob in reranked_targets:
@@ -90,3 +115,7 @@ if __name__ == '__main__':
 
     end_time = time.time()
     print(f'Time elapsed: {end_time-start_time}s.')
+
+
+if __name__ == '__main__':
+    main()

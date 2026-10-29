@@ -13,7 +13,7 @@ from time import time
 import numpy as np
 
 # keep the same with search_faiss_mmp.py
-INDEX = 'datasets/RNAcentral_27/exp_moco_er_mlp_24_faisstrain1M/faiss_index_fp32.index'
+INDEX = 'datasets/RNAcentral_27/faiss/faiss_index_fp32.index'
 DATABASE_FASTA = 'datasets/RNAcentral_27/rnacentral_active_1022_v27.fasta'
 
 SKIP_IF_RESIDENT = 0.98       # if residency ratio is above this, consider prewarming unnecessary

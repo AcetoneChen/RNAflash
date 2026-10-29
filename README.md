@@ -21,11 +21,13 @@ conda env create -f requirements.yml
 conda activate RNAflash
 ```
 
+Installation typically takes about 30 minutes, depending on network speed and
+package caches, excluding model and database downloads.
+
 Dependencies are pinned in `requirements.yml`, including PyTorch 2.6.0 (CUDA
 12.4), FAISS GPU 1.13.2 (CUDA 12.6), and HMMER 3.4 (`nhmmer` and
 `esl-reformat`). An NVIDIA GPU and a driver compatible with CUDA 12.6 are
 required. Tested on Ubuntu 16.04.6 LTS with a single RTX 3090 (24 GiB).
-RiNALMo additionally requires FlashAttention (tested with 2.7.1.post4).
 
 Download the [checkpoints](https://drive.google.com/file/d/103fUAx3c10UUAdVR7fczqBBUNQDW09y9/view?usp=sharing)
 and place them at `ckpts/RNAflashR.ckpt` (retrieval) and `ckpts/RNAflashA.ckpt`
@@ -81,7 +83,7 @@ come from the same database build.
 
 Place one query per file in `datasets/<target>/fasta/<query_id>.fasta`, using one
 unwrapped sequence line. Replace `my_queries` below with your target directory
-name (e.g. `RNAsolo_singlechain` for the benchmark).
+name (e.g. `RNAsolo_singlechain` as a demo).
 
 For FAISS retrieval followed by nhmmer alignment:
 
@@ -90,25 +92,36 @@ python RNAflashL.py --target my_queries --device cuda:0
 ```
 
 Defaults: `--probe 512`, `--topk 5000`, and prewarming disabled. Add `--prewarm`
-to enable it, or `--save-dir /path/to/output` to change the output base directory.
+to enable it. It is highly recommended to use prewarm, as it reads faiss database to cache and substantially reduce search time. Use `--save-dir /path/to/output` to change the output base directory.
 MSAs are saved to:
 
 ```text
-datasets/my_queries/a2m_RNAflashL_nprobe512_top5000_exp/<query_id>.a2m
+datasets/my_queries/a2m_RNAflashL_nprobe512_top5000/<query_id>.a2m
 ```
+
+Each query produces an `.a2m` file containing the query sequence and aligned
+database hits.
 
 For retrieval followed by RNAflashA alignment:
 
 ```bash
-python search_faiss_mmp.py --target my_queries --probe 512 --topk 5000
-python align.py
+python search_faiss_mmp.py --target my_queries --probe 512 --topk 1000 --device cuda:0
+python align.py --target my_queries --probe 512 --topk 1000 --device cuda:0
 ```
 
-Before running, set `device` in both scripts to an available GPU (`cuda:0` for a
-single GPU; the scripts currently default to `cuda:2`). Set `align.py`'s `fasta_dir` to
-`datasets/my_queries/search_all/search_nprobe512_top5000`; set `a2m_dir` to your
-desired output directory. These settings are configured inside `align.py`.
+Use the same `--target`, `--probe`, and `--topk` for search and alignment.
+Both scripts default to `RNAsolo_singlechain`, 512, and 1000, respectively,
+and use `cuda:0`. Alignment reads from
+`datasets/my_queries/search_all/search_nprobe512_top1000` and writes to
+`datasets/my_queries/a2m_RNAflashA_nprobe512_top1000` for the example above.
+Override alignment paths with `--fasta-dir` and `--output-dir`, select a model
+with `--checkpoint`, or adjust `--batch-size` (default: 8).
 
-Standalone prewarming is optional: set `INDEX` and `DATABASE_FASTA` in
+Standalone prewarming is optional but recommended: set `INDEX` and `DATABASE_FASTA` in
 `search_faiss_prewarm.py` to the same paths used by retrieval, then run
 `python search_faiss_prewarm.py` before the search.
+
+Reference runtimes are shown in our paper. For the full `RNAsolo_singlechain`
+set on a single RTX 3090, the FAISS search pipeline takes tens of seconds,
+prewarming and RNAflash-L each take a few minutes, and RNAflashA alignment
+takes about half an hour.

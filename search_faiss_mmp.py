@@ -14,8 +14,6 @@ from src.data.converters import ri_converter
 from src.models.ernierna.converter import ErnieRNA_Converter
 from src.models.RNAflashR import RNAflashR
 
-device = torch.device('cuda:2')
-
 USE_MMAP = True
 
 
@@ -56,7 +54,8 @@ def parse_fasta(fasta_path):
 
 
 def search(index_path, search_target='RNAsolo_singlechain', probe=512,
-           topk=1000):
+           topk=1000, device='cuda:0'):
+    device = torch.device(device)
     t_all = time()
     stats = {}
     L.seed_everything()
@@ -120,10 +119,10 @@ def search(index_path, search_target='RNAsolo_singlechain', probe=512,
     return stats
 
 
-def main(probe=512, topk=1000, search_target='RNAsolo_singlechain'):
+def main(probe=512, topk=1000, search_target='RNAsolo_singlechain', device='cuda:0'):
     index_path = INDEX
 
-    stats = search(index_path, search_target, probe, topk)
+    stats = search(index_path, search_target, probe, topk, device)
 
     W = 60
     print('\n' + '=' * W)
@@ -144,5 +143,6 @@ if __name__ == '__main__':
     ap.add_argument('--probe', type=int, default=512)
     ap.add_argument('--topk', type=int, default=1000)
     ap.add_argument('--target', default='RNAsolo_singlechain')
+    ap.add_argument('--device', default='cuda:0')
     a = ap.parse_args()
-    main(probe=a.probe, topk=a.topk, search_target=a.target)
+    main(probe=a.probe, topk=a.topk, search_target=a.target, device=a.device)
